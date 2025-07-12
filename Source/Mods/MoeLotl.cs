@@ -8,7 +8,7 @@ namespace Multiplayer.Compat
     /// <see href="https://github.com/juanosarg/AlphaMechs"/>
     /// <see href="https://steamcommunity.com/sharedfiles/filedetails/?id=2973169158"/>
     [MpCompatFor("HenTaiLoliTeam.axolotl")]
-    public class MoeLotl Race
+    public class MoeLotlRace
     {
         public MoeLotlRace(ModContentPack mod)
         {
