@@ -8,9 +8,9 @@ namespace Multiplayer.Compat
     /// <see href="https://github.com/juanosarg/AlphaMechs"/>
     /// <see href="https://steamcommunity.com/sharedfiles/filedetails/?id=2973169158"/>
     [MpCompatFor("HenTaiLoliTeam.Axolotl")]
-    public class MoeLotlRace
+    public class Axolotl
     {
-        public MoeLotlRace(ModContentPack mod)
+        public Axolotl(ModContentPack mod)
         {
             // Gizmos
             MP.RegisterSyncMethod(AccessTools.DeclaredMethod("Axolotl.CompProperties_LotiQiRangedWeapon_ChangeProjectile"));
