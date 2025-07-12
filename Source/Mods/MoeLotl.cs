@@ -10,7 +10,7 @@ namespace Multiplayer.Compat
     [MpCompatFor("HenTaiLoliTeam.axolotl")]
     public class MoeLotl Race
     {
-        public MoeLotl Race(ModContentPack mod)
+        public MoeLotlRace(ModContentPack mod)
         {
             // Gizmos
             MP.RegisterSyncMethod(AccessTools.DeclaredMethod("Axolotl.CompProperties_LotiQiRangedWeapon_ChangeProjectile"));
