@@ -1,7 +1,5 @@
-// Milira_MpCompat.cs
+// Milira_MpCompat.cs (repaired)
 // Broad, conservative Multiplayer compatibility patch for Milira.dll
-// Place in: Multiplayer-Compatibility/Source/Mods/
-// If you get a compile error about 'MpCompatFor', add the correct 'using' for your MPCompat loader (commonly "Multiplayer" or "Multiplayer.Compat")
 
 
 using System;
@@ -11,20 +9,18 @@ using System.Collections.Generic;
 using HarmonyLib;
 
 
-// Keep the attribute so the MPCompat loader can pick this up. If you get a compile error, see the note above.
 [MpCompatFor("Milira")]
 public static class Milira_MpCompat
 {
 public static void Patch(Harmony harmony)
 {
-if (harmony == null) return;
+if (harmony == null)
+return;
 
 
-// Attempt to locate the multiplayer client-cancel prefixes used across MPCompat patches.
 var cancelPrefixes = FindCancelPrefixes();
 
 
-// List of Milira namespace/type name hints gathered from the assembly scan.
 var typeNameHints = new[]
 {
 "Milira",
@@ -42,8 +38,7 @@ var typeNameHints = new[]
 };
 
 
-var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-foreach (var asm in assemblies)
+foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
 {
 Type[] types;
 try { types = asm.GetTypes(); }
@@ -52,12 +47,14 @@ catch { continue; }
 
 foreach (var t in types)
 {
-if (t == null || t.FullName == null) continue;
+if (t?.FullName == null)
+continue;
+
+
 if (!typeNameHints.Any(h => t.FullName.IndexOf(h, StringComparison.OrdinalIgnoreCase) >= 0))
 continue;
 
 
-// Common UI / gizmo methods to patch
 TryPatchMethodByName(harmony, t, "CompGetGizmosExtra", cancelPrefixes);
 TryPatchMethodByName(harmony, t, "GetGizmos", cancelPrefixes);
 TryPatchMethodByName(harmony, t, "GetCaravanGizmos", cancelPrefixes);
@@ -73,7 +70,6 @@ TryPatchMethodByName(harmony, t, "GeneratePawn", cancelPrefixes);
 TryPatchMethodByName(harmony, t, "TrySpawn", cancelPrefixes);
 
 
-// Patch compiler-generated iterators and closure methods
 PatchCompilerGeneratedIterators(harmony, asm, t, cancelPrefixes);
 PatchClosureMethods(harmony, t, cancelPrefixes);
 }
@@ -103,22 +99,9 @@ var t = AccessTools.TypeByName(typeName);
 if (t == null) continue;
 
 
-var prefix = AccessTools.Method(t, "Prefix");
-if (prefix != null && !result.Contains(prefix)) result.Add(prefix);
+var p0 = AccessTools.Method(t, "Prefix");
+if (p0 != null)
+result.Add(p0);
 
 
-var prefixWithObj = AccessTools.Method(t, "Prefix", new Type[] { typeof(object) });
-if (prefixWithObj != null && !result.Contains(prefixWithObj)) result.Add(prefixWithObj);
-}
-
-
-// fallback: search for any type that looks like a CancelSync* helper
-if (result.Count == 0)
-{
-foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-{
-Type[] types;
-try { types = asm.GetTypes(); } catch { continue; }
-foreach (var tt in types)
-{
-if (tt == null) continue;
+var p1 = AccessTools.Method(t, "Prefix", new[] { typeof(object) });
