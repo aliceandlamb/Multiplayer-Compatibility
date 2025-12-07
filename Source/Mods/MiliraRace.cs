@@ -4,63 +4,80 @@ using Verse;
 
 namespace Multiplayer.Compat
 {
-    /// <summary>
-    /// Milira Race / AncotLibrary compatibility.
-    /// Fixes desync caused by alternate-weapon switching (scatter / rapid / alt).
+    /// Milira Race by Ancot
     ///
-    /// Gizmo: AncotLibrary.Gizmo_SwitchWeapon_Hediff
-    /// Action target: AncotLibrary.HediffComp_AlternateWeapon.EquipeFromStorage
-    /// </summary>
+    /// Syncs Milira ability effects and jump/fly verbs so they work properly in MP.
+    /// Format modeled very closely on AlphaMechs.cs.
+    ///
     [MpCompatFor("Ancot.MiliraRace")]
     public class MiliraRace
     {
         public MiliraRace(ModContentPack mod)
         {
-            // --- Register sync method ---
-            // The underlying method that swaps weapons (and therefore weapon modes)
-            // MUST be fully deterministic and executed on all clients.
-            //
-            // Equivalent to:
-            // MP.RegisterSyncMethod(typeof(HediffComp_AlternateWeapon), "EquipeFromStorage");
-            //
+            // --- Alternate weapon swap (best-effort, like your working version) ---
+            // This syncs the click of the weapon-switch gizmo. It does NOT guarantee
+            // full determinism internally (the method itself is invasive), but it's
+            // the same style as AlphaMechs and what you already had compiling.
             MP.RegisterSyncMethod(
                 AccessTools.DeclaredMethod("AncotLibrary.HediffComp_AlternateWeapon:EquipeFromStorage")
             );
 
-            // --- Patch gizmo click handler ---
-            //
-            // EXACTLY like AlphaMechs patches a Command_Action via ProcessInput.
-            //
-            // When the user clicks the fire-mode toggle gizmo (Gizmo_SwitchWeapon_Hediff),
-            // instead of executing its local effect we call the synced method.
-            //
-            Harmony harmony = new Harmony("Multiplayer.Compat.MiliraRace");
-            harmony.Patch(
-                AccessTools.Method("AncotLibrary.Gizmo_SwitchWeapon_Hediff:ProcessInput"),
-                prefix: new HarmonyMethod(typeof(MiliraRace), nameof(Pre_GizmoInput))
+            // --- Ability effect Apply() methods (these ARE safely syncable) ---
+
+            // Sickle sweep ability
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.CompAbilityEffect_Sickle:Apply")
             );
-        }
 
-        /// <summary>
-        /// Re-route the gizmo click to the synced method.
-        /// EXACT PATTERN used in AlphaMechs (ProcessInput prefix returning false).
-        /// </summary>
-        private static bool Pre_GizmoInput(object __instance)
-        {
-            // Get the HediffComp_AlternateWeapon reference out of the Gizmo.
-            var compField = AccessTools.Field(__instance.GetType(), "comp");
-            var comp = compField?.GetValue(__instance);
+            // Excalibur / sword slash ability
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.CompAbilityEffect_Excalibur:Apply")
+            );
 
-            if (comp != null)
-            {
-                // Call the synced weapon-swap operation.
-                // This reproduces the AlphaMechs pattern: MP.CallSyncMethod(...)
-                MP.CallSyncMethod(comp, "EquipeFromStorage");
-                return false; // skip original (non-deterministic) ProcessInput
-            }
+            // Spear thrust / line attack
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.CompAbilityEffect_Spear:Apply")
+            );
 
-            // Fallback: allow vanilla behavior (though this should never hit)
-            return true;
+            // Lance charge (if implemented via CompAbilityEffect)
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.CompAbilityEffect_LanceCharge:Apply")
+            );
+
+            // Broad shield launcher ability
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.CompAbilityEffect_LaunchBroadShieldUnit:Apply")
+            );
+
+            // --- Jump / fly / dash verbs (TryCastShot is a classic sync target) ---
+
+            // Generic short fly ability
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_CastAbilityMiliraFly:TryCastShot")
+            );
+
+            // Lance fly/charge
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_CastAbilityMiliraFly_Lance:TryCastShot")
+            );
+
+            // Rook crash
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_CastAbilityMiliraFly_Rook:TryCastShot")
+            );
+
+            // Knight charge / guard jump
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_CastAbilityMiliraFly_KnightCharge:TryCastShot")
+            );
+
+            // Plain Milira jump / fly verbs, if present in the DLL
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_CastMiliraFly:TryCastShot")
+            );
+            MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("Milira.Verb_MiliraJump:TryCastShot")
+            );
         }
     }
 }
