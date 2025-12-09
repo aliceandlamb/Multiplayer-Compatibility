@@ -1,4 +1,6 @@
-﻿using HarmonyLib;
+using System;
+using System.Reflection;
+using HarmonyLib;
 using Multiplayer.API;
 using RimWorld;
 using Verse;
@@ -19,77 +21,69 @@ public class AdaptiveStorageFramework
 
     #region Main patch
 
-    public AdaptiveStorageFramework(ModContentPack mod) => LongEventHandler.ExecuteWhenFinished(LatePatch);
+    public AdaptiveStorageFramework(ModContentPack mod)
+    {
+        LongEventHandler.ExecuteWhenFinished(LatePatch);
+    }
 
     private static void LatePatch()
     {
         MpCompatPatchLoader.LoadPatch<AdaptiveStorageFramework>();
 
-        MP.RegisterSyncMethod(AccessTools.DeclaredMethod("AdaptiveStorage.ContentsITab:OnDropThing"))
+        // Sync dropping items from the ASF contents ITab
+        MP.RegisterSyncMethod(
+                AccessTools.DeclaredMethod("AdaptiveStorage.ContentsITab:OnDropThing"))
             .SetContext(SyncContext.MapSelected)
             .CancelIfAnyArgNull()
             .CancelIfNoSelectedMapObjects();
 
         var type = AccessTools.TypeByName("AdaptiveStorage.ThingClass");
-        thingClassAnyFreeSlotsMethod = MethodInvoker.GetHandler(AccessTools.DeclaredPropertyGetter(type, "AnyFreeSlots"));
+        if (type == null)
+        {
+            Log.Warning("[MPCompat] ASF: Could not find AdaptiveStorage.ThingClass, skipping extra patches.");
+            return;
+        }
 
+        // Cache ThingClass.AnyFreeSlots property getter for CancelExecutionIfFull
+        var anyFreeSlotsGetter = AccessTools.DeclaredPropertyGetter(type, "AnyFreeSlots");
+        if (anyFreeSlotsGetter != null)
+        {
+            thingClassAnyFreeSlotsMethod = MethodInvoker.GetHandler(anyFreeSlotsGetter);
+        }
+        else
+        {
+            Log.Warning("[MPCompat] ASF: Could not find AnyFreeSlots property on ThingClass.");
+        }
+
+        // Try to patch the dev-mode GodMode gizmo that adds random stacks
         var inner = AccessTools.Inner(type, "GodModeGizmos");
-        // Dev: Add stack of random items allowed by storage.
-        var method = MpMethodUtil.GetLambda(inner, null, MethodType.Constructor, [type], 0);
-        MP.RegisterSyncDelegate(inner, method.DeclaringType!.Name, method.Name, null).SetDebugOnly();
-        MpCompat.harmony.Patch(method, prefix: new HarmonyMethod(CancelExecutionIfFull));
+        if (inner == null)
+        {
+            Log.Warning("[MPCompat] ASF: Inner type ThingClass.GodModeGizmos not found, skipping dev gizmo sync.");
+            return;
+        }
 
-        // The other 2 dev gizmos are likely not needed to be synced, or too much effort.
-        // The first one opens a dev mode window to edit def of the selected object.
-        // Too much effort for something that a casual user shouldn't really use.
-        // The second one updates the graphics of the selected objects, which well...
-        // Is more of a client-only interaction, I believe. No point syncing it.
-    }
+        MethodInfo method = null;
 
-    #endregion
+        try
+        {
+            // The constructor most likely has a single ThingClass argument.
+            // If ASF changes, this may no longer be true; we guard with try/catch.
+            method = MpMethodUtil.GetLambda(inner, null, MethodType.Constructor, new[] { type }, 0);
+        }
+        catch (Exception e)
+        {
+            Log.Warning("[MPCompat] ASF: Failed to get GodModeGizmos ctor lambda for dev gizmo sync. " +
+                        "Skipping this dev-only patch.\n" + e);
+        }
 
-    #region Harmony patches
+        if (method == null)
+        {
+            // Everything else (OnDropThing etc.) is still synced even if we skip this.
+            return;
+        }
 
-    [MpCompatPrefix("AdaptiveStorage.ContentsITab", "OnDropThing")]
-    private static bool CancelExecutionIfNotContained(ITab_ContentsBase __instance, Thing __0, ref int __1)
-    {
-        // If the "drop" button was pressed multiple times before the execution
-        // was synced, the thing won't be contained in the container on repeat
-        // calls, causing an error. By checking if the container contains it
-        // we prevent errors.
-        if (!__instance.container.Contains(__0))
-            return false;
+        MP.RegisterSyncDelegate(inner, method.DeclaringType!.Name, method.Name, null)
+            .SetDebugOnly();
 
-        // If we've synced multiple commands to drop a specific count the stack
-        // may not have enough on repeat calls, causing errors. Ensure that
-        // the drop count isn't bigger than stack count.
-        if (__0.stackCount > __1)
-            __1 = __0.stackCount;
-        return true;
-    }
-
-    // Can't use MpCompatPrefix, can't reference the type directly.
-    // Would need to update those attributes to support string types
-    // as arguments, or a mix of strings/types.
-    private static bool CancelExecutionIfFull(Building_Storage ___Parent)
-    {
-        // The mod only displays the gizmo if there's any slots free,
-        // but there's no checks like that on the method itself.
-        // If we sync multiple commands while almost full it'll
-        // attempt to spawn items into a full container, causing errors.
-        // Prevent it by adding a check for any free slots.
-        return (bool)thingClassAnyFreeSlotsMethod(___Parent);
-    }
-
-    #endregion
-
-    #region Sync workers
-
-    [MpCompatSyncWorker("AdaptiveStorage.ContentsITab", shouldConstruct = true)]
-    private static void NoSync(SyncWorker sync, ref object obj)
-    {
-        // Don't sync, only construct
-    }
-
-    #endregion
-}
+   
